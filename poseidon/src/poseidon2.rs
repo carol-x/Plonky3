@@ -10,3 +10,14 @@ use rand::Rng;
 // reference Poseidon2 code: https://github.com/HorizenLabs/poseidon2/blob/main/plain_implementations/src/poseidon2/poseidon2.rs
 
 /// The Poseidon permutation 
+pub struct Poseidon<F, MDS, const WIDTH: usize, const ALPHA: u64>
+where
+    F: Field,
+    MDS: MDSPermutation<F, WIDTH>,
+{
+    half_num_full_rounds: usize,
+    num_partial_rounds: usize,
+    constants: Vec<F>,
+    mds: MDS,
+}
+
