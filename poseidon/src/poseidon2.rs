@@ -73,23 +73,115 @@ where
     }
 
     fn mul_external(&self, state: &mut [F; WIDTH]) {
-        let mut tmp = [F::ZERO; WIDTH];
-        for i in 0..WIDTH {
-            for j in 0..WIDTH {
-                tmp[i] += self.mat_external[i][j] * state[j];
+        match WIDTH {
+            2 => {
+                // Matrix circ(2, 1)
+                let mut sum = state[0];
+                sum.add_assign(&state[1]);
+                state[0].add_assign(&sum);
+                state[1].add_assign(&sum);
+            }
+            3 => {
+                // Matrix circ(2, 1, 1)
+                let mut sum = state[0];
+                sum.add_assign(&state[1]);
+                sum.add_assign(&state[2]);
+                state[0].add_assign(&sum);
+                state[1].add_assign(&sum);
+                state[2].add_assign(&sum);
+            }
+            4 | 8 | 12 | 16 | 20 | 24 => {
+                // Applying cheap 4x4 MDS matrix to each 4-element part of the state
+                let t4 = WIDTH / 4;
+                for i in 0..t4 {
+                    let start_index = i * 4;
+                    let mut t_0 = state[start_index];
+                    t_0.add_assign(&state[start_index + 1]);
+                    let mut t_1 = state[start_index + 2];
+                    t_1.add_assign(&state[start_index + 3]);
+                    let mut t_2 = state[start_index + 1];
+                    t_2.double_in_place();
+                    t_2.add_assign(&t_1);
+                    let mut t_3 = state[start_index + 3];
+                    t_3.double_in_place();
+                    t_3.add_assign(&t_0);
+                    let mut t_4 = t_1;
+                    t_4.double_in_place();
+                    t_4.double_in_place();
+                    t_4.add_assign(&t_3);
+                    let mut t_5 = t_0;
+                    t_5.double_in_place();
+                    t_5.double_in_place();
+                    t_5.add_assign(&t_2);
+                    let mut t_6 = t_3;
+                    t_6.add_assign(&t_5);
+                    let mut t_7 = t_2;
+                    t_7.add_assign(&t_4);
+                    state[start_index] = t_6;
+                    state[start_index + 1] = t_5;
+                    state[start_index + 2] = t_7;
+                    state[start_index + 3] = t_4;
+                }
+
+                // Applying second cheap matrix
+                let mut stored = [F::zero(); 4];
+                for l in 0..4 {
+                    stored[l] = state[l];
+                    for j in 1..t4 {
+                        stored[l].add_assign(&state[4 * j + l]);
+                    }
+                }
+                for i in 0..state.len() {
+                    state[i].add_assign(&stored[i % 4]);
+                }
+            }
+            _ => {
+                panic!()
             }
         }
-        *state = tmp;
     }
 
     fn mul_internal(&self, state: &mut [F; WIDTH]) {
-        let mut tmp = [F::ZERO; WIDTH];
-        for i in 0..WIDTH {
-            for j in 0..WIDTH {
-                tmp[i] += self.mat_internal[i][j] * state[j];
+        match WIDTH {
+            2 => {
+                // [2, 1]
+                // [1, 3]
+                let mut sum = state[0];
+                sum.add_assign(&state[1]);
+                state[0].add_assign(&sum);
+                state[1].double_in_place();
+                state[1].add_assign(&sum);
+            }
+            3 => {
+                // [2, 1, 1]
+                // [1, 2, 1]
+                // [1, 1, 3]
+                let mut sum = state[0];
+                sum.add_assign(&state[1]);
+                sum.add_assign(&state[2]);
+                state[0].add_assign(&sum);
+                state[1].add_assign(&sum);
+                state[2].double_in_place();
+                state[2].add_assign(&sum);
+            }
+            4 | 8 | 12 | 16 | 20 | 24 => {
+                // Compute state sum
+                let mut sum = state[0];
+                state
+                    .iter()
+                    .skip(1)
+                    .take(WIDTH-1)
+                    .for_each(|el| sum.add_assign(el));
+                // Add sum + diag entry * element to each element
+                for i in 0..state.len() {
+                    state[i].mul_assign(&mat_internal_diag_m_1[i]);
+                    state[i].add_assign(&sum);
+                }
+            }
+            _ => {
+                panic!()
             }
         }
-        *state = tmp;
     }
 
     fn constant_layer(&self, state: &mut [F; WIDTH], round: usize) {
