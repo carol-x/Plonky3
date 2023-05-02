@@ -33,7 +33,7 @@ where
         mat_internal: Vec<Vec<F>>,
     ) -> Self {
         let num_rounds = 2 * half_num_full_rounds + num_partial_rounds;
-        assert_eq!(constants.len(), WIDTH * num_rounds);
+        assert_eq!(constants.len(), num_rounds);
         assert!(sbox_degree == 3 || sbox_degree == 5 || sbox_degree == 7 || sbox_degree == 11);
         Self {
             half_num_full_rounds,
@@ -72,18 +72,30 @@ where
         state[0] = state[0].exp_u64(ALPHA);
     }
 
-    fn constant_layer(&self, state: &mut [F; WIDTH], round: usize) {
-        for (i, x) in state.iter_mut().enumerate() {
-            *x += self.constants[round * WIDTH + i];
+    fn mul_external(&self, state: &mut [F; WIDTH]) {
+        let mut tmp = [F::ZERO; WIDTH];
+        for i in 0..WIDTH {
+            for j in 0..WIDTH {
+                tmp[i] += self.mat_external[i][j] * state[j];
+            }
         }
+        *state = tmp;
+    }
+
+    fn mul_internal(&self, state: &mut [F; WIDTH]) {
+        let mut tmp = [F::ZERO; WIDTH];
+        for i in 0..WIDTH {
+            for j in 0..WIDTH {
+                tmp[i] += self.mat_internal[i][j] * state[j];
+            }
+        }
+        *state = tmp;
+    }
+
+    fn constant_layer(&self, state: &mut [F; WIDTH], round: usize) {
+        state.iter().zip(self.constants[round].iter()).for_each(|(x, c)| {
+            *x += *c;
+        });
     }
 }
-
-// sbox
-
-// matmul external round 
-
-// matmul internal round
-
-
 
