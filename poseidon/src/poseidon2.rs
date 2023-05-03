@@ -21,7 +21,7 @@ where
     mat_internal: Vec<Vec<F>>,
 }
 
-impl<F, MDS, const WIDTH: usize> Poseidon2<F, WIDTH>
+impl<F, const WIDTH: usize> Poseidon2<F, WIDTH>
 where
     F: Field,
 {
@@ -189,5 +189,60 @@ where
             *x += *c;
         });
     }
+
+    fn permute(&self, mut state: [F; WIDTH]) -> [F; WIDTH] {
+        let mut round_ctr = 0;
+        self.half_full_rounds(&mut state, &mut round_ctr);
+        self.partial_rounds(&mut state, &mut round_ctr);
+        self.half_full_rounds(&mut state, &mut round_ctr);
+        state
+    }
 }
 
+#[cfg(test)]
+mod poseidon2_tests_goldilocks {
+    use super::*;
+    
+    use crate::poseidon2::poseidon2_instance_goldilocks::{
+        POSEIDON2_GOLDILOCKS_8_PARAMS,
+        POSEIDON2_GOLDILOCKS_12_PARAMS,
+        POSEIDON2_GOLDILOCKS_16_PARAMS,
+        POSEIDON2_GOLDILOCKS_20_PARAMS,
+    };
+    use std::convert::TryFrom;
+
+    type Scalar = FpGoldiLocks;
+
+    static TESTRUNS: usize = 5;
+
+    #[test]
+    fn consistent_perm() {
+        use rand::{thread_rng, Rng}; 
+        let instances = vec![
+            Poseidon2::new(&POSEIDON2_GOLDILOCKS_8_PARAMS),
+            Poseidon2::new(&POSEIDON2_GOLDILOCKS_12_PARAMS),
+            Poseidon2::new(&POSEIDON2_GOLDILOCKS_16_PARAMS),
+            Poseidon2::new(&POSEIDON2_GOLDILOCKS_20_PARAMS),
+        ];
+        for instance in instances {
+            let t = instance.params.t;
+            for _ in 0..TESTRUNS {
+                let input1: Vec<Scalar> = (0..t).map(|_| random_scalar()).collect();
+
+                let mut input2: Vec<Scalar>;
+                loop {
+                    input2 = (0..t).map(|_| F::rand(&mut rand::thread_rng())).collect();
+                    if input1 != input2 {
+                        break;
+                    }
+                }
+
+                let perm1 = instance.permute(&input1);
+                let perm2 = instance.permute(&input1);
+                let perm3 = instance.permute(&input2);
+                assert_eq!(perm1, perm2);
+                assert_ne!(perm1, perm3);
+            }
+        }
+    }
+}
