@@ -3,7 +3,7 @@ use core::iter::{Product, Sum};
 use core::ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub, SubAssign};
 use core::slice;
 
-use crate::field::{Field, FieldLike};
+use crate::field::{AbstractField, Field};
 
 /// # Safety
 /// - `WIDTH` is assumed to be a power of 2.
@@ -11,7 +11,7 @@ use crate::field::{Field, FieldLike};
 ///   without UB.
 pub unsafe trait PackedField:
     'static
-    + FieldLike<Self::Scalar>
+    + AbstractField<Self::Scalar>
     + Add<Self, Output = Self> // TODO: Already from FieldLike
     + Add<Self::Scalar, Output = Self>
     + AddAssign<Self>
@@ -45,9 +45,6 @@ pub unsafe trait PackedField:
     const WIDTH: usize;
     const ZEROS: Self;
     const ONES: Self;
-
-    fn from_arr(arr: [Self::Scalar; Self::WIDTH]) -> Self;
-    fn as_arr(&self) -> [Self::Scalar; Self::WIDTH];
 
     fn from_slice(slice: &[Self::Scalar]) -> &Self;
     fn from_slice_mut(slice: &mut [Self::Scalar]) -> &mut Self;
@@ -107,14 +104,6 @@ unsafe impl<F: Field> PackedField for F {
     const WIDTH: usize = 1;
     const ZEROS: Self = F::ZERO;
     const ONES: Self = F::ONE;
-
-    fn from_arr(arr: [Self::Scalar; Self::WIDTH]) -> Self {
-        arr[0]
-    }
-
-    fn as_arr(&self) -> [Self::Scalar; Self::WIDTH] {
-        [*self]
-    }
 
     fn from_slice(slice: &[Self::Scalar]) -> &Self {
         &slice[0]

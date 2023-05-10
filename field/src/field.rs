@@ -2,13 +2,14 @@ use crate::packed::PackedField;
 use core::fmt::{Debug, Display};
 use core::iter::{Product, Sum};
 use core::ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub, SubAssign};
+use core::slice;
 use itertools::Itertools;
 
 /// A generalization of `Field` which permits things like
 /// - an actual field element
 /// - a symbolic expression which would evaluate to a field element
 /// - a vector of field elements
-pub trait FieldLike<F: Field>:
+pub trait AbstractField<F: Field>:
     Sized
     + From<F>
     + Clone
@@ -33,11 +34,20 @@ pub trait FieldLike<F: Field>:
     const ONE: Self;
     const TWO: Self;
     const NEG_ONE: Self;
+    const MULTIPLICATIVE_GROUP_GENERATOR: Self;
 }
 
 /// An element of a finite field.
 pub trait Field:
-    FieldLike<Self> + 'static + Copy + Default + Div<Self, Output = Self> + Eq + Send + Sync + Display
+    AbstractField<Self>
+    + 'static
+    + Copy
+    + Default
+    + Div<Self, Output = Self>
+    + Eq
+    + Send
+    + Sync
+    + Display
 {
     type Packing: PackedField<Scalar = Self>;
 
@@ -87,37 +97,64 @@ pub trait Field:
         }
         product
     }
+
+    fn exp_power_of_2(&self, power_log: usize) -> Self {
+        let mut res = *self;
+        for _ in 0..power_log {
+            res = res.square();
+        }
+        res
+    }
+
+    fn powers(&self) -> Powers<Self> {
+        Powers {
+            base: *self,
+            current: Self::ONE,
+        }
+    }
 }
 
 pub trait FieldExtension<Base: Field>:
-    Field + Add<Base, Output = Self> + Mul<Base, Output = Self>
+    AbstractField<Base>
+    + Field
+    + Add<Base, Output = Self>
+    + AddAssign<Base>
+    + Sub<Base, Output = Self>
+    + SubAssign<Base>
+    + Mul<Base, Output = Self>
+    + MulAssign<Base>
 {
     const D: usize;
 
-    fn to_base_array(&self) -> [Base; Self::D];
-
-    fn from_base_array(arr: [Base; Self::D]) -> Self;
-
     fn from_base(b: Base) -> Self;
+
+    fn from_base_slice(bs: &[Base]) -> Self;
+
+    fn as_base_slice(&self) -> &[Base];
 }
 
 impl<F: Field> FieldExtension<F> for F {
     const D: usize = 1;
 
-    fn to_base_array(&self) -> [F; Self::D] {
-        [*self]
-    }
-
-    fn from_base_array(arr: [F; Self::D]) -> Self {
-        arr[0]
-    }
-
     fn from_base(b: F) -> Self {
         b
+    }
+
+    fn from_base_slice(bs: &[F]) -> Self {
+        assert_eq!(bs.len(), 1);
+        bs[0]
+    }
+
+    fn as_base_slice(&self) -> &[F] {
+        slice::from_ref(self)
     }
 }
 
 pub trait PrimeField: Field {}
+
+pub trait Field32: Field {
+    fn as_canonical_u32(&self) -> u32;
+}
 
 /// A field which supplies information like the two-adicity of its multiplicative group, and methods
 /// for obtaining two-adic roots of unity.
@@ -134,6 +171,40 @@ pub trait TwoAdicField: Field {
         let base = Self::POWER_OF_TWO_GENERATOR;
         base.mul_2exp_u64((Self::TWO_ADICITY - bits) as u64)
     }
+}
+
+/// An iterator over the powers of a certain base element `b`: `b^0, b^1, b^2, ...`.
+#[derive(Clone)]
+pub struct Powers<F: Field> {
+    base: F,
+    current: F,
+}
+
+impl<F: Field> Iterator for Powers<F> {
+    type Item = F;
+
+    fn next(&mut self) -> Option<F> {
+        let result = self.current;
+        self.current *= self.base;
+        Some(result)
+    }
+}
+
+/// Computes a multiplicative subgroup whose order is known in advance.
+pub fn cyclic_subgroup_known_order<F: Field>(
+    generator: F,
+    order: usize,
+) -> impl Iterator<Item = F> + Clone {
+    generator.powers().take(order)
+}
+
+/// Computes a coset of a multiplicative subgroup whose order is known in advance.
+pub fn cyclic_subgroup_coset_known_order<F: Field>(
+    generator: F,
+    shift: F,
+    order: usize,
+) -> impl Iterator<Item = F> + Clone {
+    cyclic_subgroup_known_order(generator, order).map(move |x| x * shift)
 }
 
 fn bits_u64(n: u64) -> usize {

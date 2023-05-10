@@ -7,7 +7,7 @@ use core::fmt::{Debug, Display, Formatter};
 use core::hash::{Hash, Hasher};
 use core::iter::{Product, Sum};
 use core::ops::{Add, AddAssign, BitXorAssign, Div, Mul, MulAssign, Neg, Sub, SubAssign};
-use p3_field::field::{Field, FieldLike, PrimeField};
+use p3_field::field::{AbstractField, Field, Field32, PrimeField};
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
 
@@ -24,16 +24,6 @@ impl Mersenne31 {
     fn new(value: u32) -> Self {
         Self {
             value: value % Self::ORDER,
-        }
-    }
-
-    fn as_canonical_u32(&self) -> u32 {
-        // Since our invariant guarantees that `value` fits in 31 bits, there is only one possible
-        // `value` that is not canonical, namely 2^31 - 1 = p = 0.
-        if self.value == Self::ORDER {
-            0
-        } else {
-            self.value
         }
     }
 }
@@ -94,13 +84,15 @@ impl Distribution<Mersenne31> for Standard {
     }
 }
 
-impl FieldLike<Self> for Mersenne31 {
+impl AbstractField<Self> for Mersenne31 {
     const ZERO: Self = Self { value: 0 };
     const ONE: Self = Self { value: 1 };
     const TWO: Self = Self { value: 2 };
     const NEG_ONE: Self = Self {
         value: Self::ORDER - 1,
     };
+    // Sage: GF(2^31 - 1).multiplicative_generator()
+    const MULTIPLICATIVE_GROUP_GENERATOR: Self = Self { value: 7 };
 }
 
 impl Field for Mersenne31 {
@@ -135,6 +127,18 @@ impl Field for Mersenne31 {
 }
 
 impl PrimeField for Mersenne31 {}
+
+impl Field32 for Mersenne31 {
+    fn as_canonical_u32(&self) -> u32 {
+        // Since our invariant guarantees that `value` fits in 31 bits, there is only one possible
+        // `value` that is not canonical, namely 2^31 - 1 = p = 0.
+        if self.value == Self::ORDER {
+            0
+        } else {
+            self.value
+        }
+    }
+}
 
 impl Add<Self> for Mersenne31 {
     type Output = Self;
@@ -224,7 +228,7 @@ impl Div for Mersenne31 {
 #[cfg(test)]
 mod tests {
     use crate::Mersenne31;
-    use p3_field::field::{Field, FieldLike};
+    use p3_field::field::{AbstractField, Field};
 
     type F = Mersenne31;
 
