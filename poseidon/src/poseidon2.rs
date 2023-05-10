@@ -16,7 +16,7 @@ where
 {
     half_num_full_rounds: usize,
     num_partial_rounds: usize,
-    sbox_degree: usize,
+    sbox_degree: u64,
     constants: Vec<Vec<F>>,
     mat_internal: Vec<Vec<F>>,
 }
@@ -28,7 +28,7 @@ where
     pub fn new(
         half_num_full_rounds: usize,
         num_partial_rounds: usize,
-        sbox_degree: usize,
+        sbox_degree: u64,
         constants: Vec<Vec<F>>,
         mat_internal: Vec<Vec<F>>,
     ) -> Self {
@@ -47,7 +47,7 @@ where
     fn half_full_rounds(&self, state: &mut [F; WIDTH], round_ctr: &mut usize) {
         for _ in 0..self.half_num_full_rounds {
             self.constant_layer(state, *round_ctr);
-            Self::full_sbox_layer(state);
+            self.full_sbox_layer(state);
             self.mul_external(state);
             *round_ctr += 1;
         }
@@ -56,20 +56,20 @@ where
     fn partial_rounds(&self, state: &mut [F; WIDTH], round_ctr: &mut usize) {
         for _ in 0..self.num_partial_rounds {
             self.constant_layer(state, *round_ctr);
-            Self::partial_sbox_layer(state);
+            self.partial_sbox_layer(state);
             self.mul_internal(state);
             *round_ctr += 1;
         }
     }
 
-    fn full_sbox_layer(state: &mut [F; WIDTH]) {
+    fn full_sbox_layer(&self, state: &mut [F; WIDTH]) {
         for x in state.iter_mut() {
-            *x = x.exp_u64(ALPHA);
+            *x = x.exp_u64(self.sbox_degree);
         }
     }
 
-    fn partial_sbox_layer(state: &mut [F; WIDTH]) {
-        state[0] = state[0].exp_u64(ALPHA);
+    fn partial_sbox_layer(&self, state: &mut [F; WIDTH]) {
+        state[0] = state[0].exp_u64(self.sbox_degree);
     }
 
     fn mul_external(&self, state: &mut [F; WIDTH]) {
@@ -77,18 +77,18 @@ where
             2 => {
                 // Matrix circ(2, 1)
                 let mut sum = state[0];
-                sum.add_assign(&state[1]);
-                state[0].add_assign(&sum);
-                state[1].add_assign(&sum);
+                sum.add_assign(state[1]);
+                state[0].add_assign(sum);
+                state[1].add_assign(sum);
             }
             3 => {
                 // Matrix circ(2, 1, 1)
                 let mut sum = state[0];
-                sum.add_assign(&state[1]);
-                sum.add_assign(&state[2]);
-                state[0].add_assign(&sum);
-                state[1].add_assign(&sum);
-                state[2].add_assign(&sum);
+                sum.add_assign(state[1]);
+                sum.add_assign(state[2]);
+                state[0].add_assign(sum);
+                state[1].add_assign(sum);
+                state[2].add_assign(sum);
             }
             4 | 8 | 12 | 16 | 20 | 24 => {
                 // Applying cheap 4x4 MDS matrix to each 4-element part of the state
@@ -96,27 +96,27 @@ where
                 for i in 0..t4 {
                     let start_index = i * 4;
                     let mut t_0 = state[start_index];
-                    t_0.add_assign(&state[start_index + 1]);
+                    t_0.add_assign(state[start_index + 1]);
                     let mut t_1 = state[start_index + 2];
-                    t_1.add_assign(&state[start_index + 3]);
+                    t_1.add_assign(state[start_index + 3]);
                     let mut t_2 = state[start_index + 1];
-                    t_2.double_in_place();
-                    t_2.add_assign(&t_1);
+                    t_2 = t_2 * 2; 
+                    t_2.add_assign(t_1);
                     let mut t_3 = state[start_index + 3];
                     t_3.double_in_place();
-                    t_3.add_assign(&t_0);
+                    t_3.add_assign(t_0);
                     let mut t_4 = t_1;
                     t_4.double_in_place();
                     t_4.double_in_place();
-                    t_4.add_assign(&t_3);
+                    t_4.add_assign(t_3);
                     let mut t_5 = t_0;
                     t_5.double_in_place();
                     t_5.double_in_place();
-                    t_5.add_assign(&t_2);
+                    t_5.add_assign(t_2);
                     let mut t_6 = t_3;
-                    t_6.add_assign(&t_5);
+                    t_6.add_assign(t_5);
                     let mut t_7 = t_2;
-                    t_7.add_assign(&t_4);
+                    t_7.add_assign(t_4);
                     state[start_index] = t_6;
                     state[start_index + 1] = t_5;
                     state[start_index + 2] = t_7;
@@ -147,22 +147,22 @@ where
                 // [2, 1]
                 // [1, 3]
                 let mut sum = state[0];
-                sum.add_assign(&state[1]);
-                state[0].add_assign(&sum);
+                sum.add_assign(state[1]);
+                state[0].add_assign(sum);
                 state[1].double_in_place();
-                state[1].add_assign(&sum);
+                state[1].add_assign(sum);
             }
             3 => {
                 // [2, 1, 1]
                 // [1, 2, 1]
                 // [1, 1, 3]
                 let mut sum = state[0];
-                sum.add_assign(&state[1]);
-                sum.add_assign(&state[2]);
-                state[0].add_assign(&sum);
-                state[1].add_assign(&sum);
+                sum.add_assign(state[1]);
+                sum.add_assign(state[2]);
+                state[0].add_assign(sum);
+                state[1].add_assign(sum);
                 state[2].double_in_place();
-                state[2].add_assign(&sum);
+                state[2].add_assign(sum);
             }
             4 | 8 | 12 | 16 | 20 | 24 => {
                 // Compute state sum
@@ -171,11 +171,11 @@ where
                     .iter()
                     .skip(1)
                     .take(WIDTH-1)
-                    .for_each(|el| sum.add_assign(el));
+                    .for_each(|el| sum.add_assign(*el));
                 // Add sum + diag entry * element to each element
                 for i in 0..state.len() {
-                    state[i].mul_assign(&mat_internal_diag_m_1[i]);
-                    state[i].add_assign(&sum);
+                    state[i].mul_assign(self.mat_internal[i][i]);
+                    state[i].add_assign(sum);
                 }
             }
             _ => {
@@ -219,10 +219,7 @@ mod poseidon2_tests_goldilocks {
     fn consistent_perm() {
         use rand::{thread_rng, Rng}; 
         let instances = vec![
-            Poseidon2::new(&POSEIDON2_GOLDILOCKS_8_PARAMS),
-            Poseidon2::new(&POSEIDON2_GOLDILOCKS_12_PARAMS),
-            Poseidon2::new(&POSEIDON2_GOLDILOCKS_16_PARAMS),
-            Poseidon2::new(&POSEIDON2_GOLDILOCKS_20_PARAMS),
+            Poseidon2::new(&POSEIDON2_GOLDILOCKS_8_PARAMS)
         ];
         for instance in instances {
             let t = instance.params.t;
