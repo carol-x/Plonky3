@@ -20,6 +20,10 @@ jobs:
       with:
         toolchain: nightly
     - name: Build
-      run: cargo +nightly build --verbose
+      run: cargo +nightly build --verbose --all-targets
     - name: Test
-      run: cargo +nightly test --verbose
+      run: |
+        cargo +nightly test --verbose --all-targets
+        # It's necessary to run doc tests separately, until
+        # <https://github.com/rust-lang/cargo/issues/6669> is fixed.
+        cargo +nightly test --verbose --doc

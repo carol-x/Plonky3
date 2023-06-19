@@ -1,40 +1,29 @@
-use crate::hasher::{CryptographicHasher, IterHasher};
+use crate::hasher::CryptographicHasher;
 use crate::permutation::ArrayPermutation;
-use alloc::vec::Vec;
 use core::marker::PhantomData;
 use itertools::Itertools;
 
 /// A padding-free, overwrite-mode sponge function.
 ///
 /// WIDTH is the sponge's rate + sponge's capacity
-pub struct PaddingFreeSponge<T, P, const WIDTH: usize>
-where
-    P: ArrayPermutation<T, WIDTH>,
-{
-    _phantom_f: PhantomData<T>,
-    // _phantom_p: PhantomData<P>,
+pub struct PaddingFreeSponge<T, P, const WIDTH: usize> {
     permutation: P,
+    _phantom_f: PhantomData<T>,
 }
 
-impl<T: Default + Copy, P, const RATE: usize, const WIDTH: usize>
-    CryptographicHasher<Vec<T>, [T; RATE]> for PaddingFreeSponge<T, P, WIDTH>
-where
-    P: ArrayPermutation<T, WIDTH>,
-{
-    fn hash(&self, input: &Vec<T>) -> [T; RATE] {
-        // static_assert(RATE < WIDTH)
-        let mut state = [T::default(); WIDTH];
-        for input_chunk in input.chunks(RATE) {
-            state[..input_chunk.len()].copy_from_slice(input_chunk);
-            state = self.permutation.permute(state);
+impl<T, P, const WIDTH: usize> PaddingFreeSponge<T, P, WIDTH> {
+    pub fn new(permutation: P) -> Self {
+        Self {
+            permutation,
+            _phantom_f: PhantomData,
         }
-        state[..RATE].try_into().unwrap()
     }
 }
 
-impl<T: Default + Copy, P, const RATE: usize, const WIDTH: usize> IterHasher<T, [T; RATE]>
+impl<T, P, const RATE: usize, const WIDTH: usize> CryptographicHasher<T, [T; RATE]>
     for PaddingFreeSponge<T, P, WIDTH>
 where
+    T: Default + Copy,
     P: ArrayPermutation<T, WIDTH>,
 {
     fn hash_iter<I>(&self, input: I) -> [T; RATE]

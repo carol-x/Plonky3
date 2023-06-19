@@ -4,6 +4,14 @@
 
 extern crate alloc;
 
-pub mod field;
-pub mod packed;
-pub mod symbolic;
+mod batch_inverse;
+mod field;
+mod helpers;
+mod packed;
+mod symbolic;
+
+pub use batch_inverse::*;
+pub use field::*;
+pub use helpers::*;
+pub use packed::*;
+pub use symbolic::*;

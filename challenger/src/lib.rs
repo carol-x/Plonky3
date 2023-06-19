@@ -4,11 +4,14 @@
 
 extern crate alloc;
 
-pub mod duplex_challenger;
-pub mod hash_challenger;
+mod duplex_challenger;
+mod hash_challenger;
+
+pub use duplex_challenger::*;
+pub use hash_challenger::*;
 
 use alloc::vec::Vec;
-use p3_field::field::{Field, FieldExtension};
+use p3_field::{AbstractExtensionField, Field};
 
 /// Observes prover messages during an IOP, and generates Fiat-Shamir challenges in response.
 pub trait Challenger<F: Field> {
@@ -20,15 +23,15 @@ pub trait Challenger<F: Field> {
         }
     }
 
-    fn observe_ext_element<FE: FieldExtension<F>>(&mut self, ext: FE) {
+    fn observe_ext_element<EF: AbstractExtensionField<F>>(&mut self, ext: EF) {
         self.observe_elements(ext.as_base_slice());
     }
 
     fn random_element(&mut self) -> F;
 
-    fn random_ext_element<FE: FieldExtension<F>>(&mut self) {
-        let vec = self.random_vec(FE::D);
-        FE::from_base_slice(&vec);
+    fn random_ext_element<EF: AbstractExtensionField<F>>(&mut self) -> EF {
+        let vec = self.random_vec(EF::D);
+        EF::from_base_slice(&vec)
     }
 
     fn random_array<const N: usize>(&mut self) -> [F; N] {

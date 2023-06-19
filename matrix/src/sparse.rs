@@ -23,6 +23,7 @@ impl<T> CsrMatrix<T> {
         self.row_indices[r]..self.row_indices[r + 1]
     }
 
+    #[must_use]
     pub fn row(&self, r: usize) -> &[(usize, T)] {
         &self.nonzero_values[self.row_index_range(r)]
     }
@@ -44,7 +45,7 @@ impl<T> CsrMatrix<T> {
         let nonzero_values = iter::repeat_with(|| (rng.gen_range(0..cols), rng.gen()))
             .take(rows * row_weight)
             .collect();
-        let row_indices = (0..rows + 1).map(|r| r * row_weight).collect();
+        let row_indices = (0..=rows).map(|r| r * row_weight).collect();
         Self {
             width: cols,
             nonzero_values,
@@ -60,9 +61,5 @@ impl<T> Matrix<T> for CsrMatrix<T> {
 
     fn height(&self) -> usize {
         self.row_indices.len() - 1
-    }
-
-    fn row(&self, _r: usize) -> &[T] {
-        todo!()
     }
 }

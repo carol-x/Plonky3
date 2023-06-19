@@ -7,7 +7,7 @@ use core::fmt::{Debug, Display, Formatter};
 use core::hash::{Hash, Hasher};
 use core::iter::{Product, Sum};
 use core::ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub, SubAssign};
-use p3_field::field::{AbstractField, Field, PrimeField, TwoAdicField};
+use p3_field::{AbstractField, Field, PrimeField, PrimeField64, TwoAdicField};
 use p3_util::{assume, branch_hint};
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
@@ -20,19 +20,12 @@ pub struct Goldilocks {
 }
 
 impl Goldilocks {
-    pub const ORDER: u64 = 0xFFFFFFFF00000001;
+    const fn new(value: u64) -> Self {
+        Self { value }
+    }
 
     /// Two's complement of `ORDER`, i.e. `2^64 - ORDER = 2^32 - 1`.
-    const NEG_ORDER: u64 = Self::ORDER.wrapping_neg();
-
-    fn as_canonical_u64(&self) -> u64 {
-        let mut c = self.value;
-        // We only need one condition subtraction, since 2 * ORDER would not fit in a u64.
-        if c >= Self::ORDER {
-            c -= Self::ORDER;
-        }
-        c
-    }
+    const NEG_ORDER: u64 = Self::ORDER_U64.wrapping_neg();
 }
 
 impl PartialEq for Goldilocks {
@@ -45,7 +38,19 @@ impl Eq for Goldilocks {}
 
 impl Hash for Goldilocks {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u64(self.as_canonical_u64())
+        state.write_u64(self.as_canonical_u64());
+    }
+}
+
+impl Ord for Goldilocks {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.as_canonical_u64().cmp(&other.as_canonical_u64())
+    }
+}
+
+impl PartialOrd for Goldilocks {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -65,23 +70,24 @@ impl Distribution<Goldilocks> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Goldilocks {
         loop {
             let next_u64 = rng.next_u64();
-            let is_canonical = next_u64 < Goldilocks::ORDER;
+            let is_canonical = next_u64 < Goldilocks::ORDER_U64;
             if is_canonical {
-                return Goldilocks { value: next_u64 };
+                return Goldilocks::new(next_u64);
             }
         }
     }
 }
 
-impl AbstractField<Self> for Goldilocks {
-    const ZERO: Self = Self { value: 0 };
-    const ONE: Self = Self { value: 1 };
-    const TWO: Self = Self { value: 2 };
-    const NEG_ONE: Self = Self {
-        value: Self::ORDER - 1,
-    };
+impl AbstractField for Goldilocks {
+    const ZERO: Self = Self::new(0);
+    const ONE: Self = Self::new(1);
+    const TWO: Self = Self::new(2);
+    const NEG_ONE: Self = Self::new(Self::ORDER_U64 - 1);
+
     // Sage: GF(2^64 - 2^32 + 1).multiplicative_generator()
-    const MULTIPLICATIVE_GROUP_GENERATOR: Self = Self { value: 7 };
+    fn multiplicative_group_generator() -> Self {
+        Self::new(7)
+    }
 }
 
 impl Field for Goldilocks {
@@ -89,7 +95,7 @@ impl Field for Goldilocks {
     type Packing = Self;
 
     fn is_zero(&self) -> bool {
-        self.value == 0 || self.value == Self::ORDER
+        self.value == 0 || self.value == Self::ORDER_U64
     }
 
     fn try_inverse(&self) -> Option<Self> {
@@ -97,21 +103,67 @@ impl Field for Goldilocks {
     }
 }
 
-impl PrimeField for Goldilocks {}
+impl PrimeField for Goldilocks {
+    fn from_canonical_u8(n: u8) -> Self {
+        Self::new(u64::from(n))
+    }
+
+    fn from_canonical_u16(n: u8) -> Self {
+        Self::new(u64::from(n))
+    }
+
+    fn from_canonical_u32(n: u32) -> Self {
+        Self::new(u64::from(n))
+    }
+
+    fn from_canonical_u64(n: u64) -> Self {
+        Self::new(n)
+    }
+
+    fn from_canonical_usize(n: usize) -> Self {
+        Self::new(n as u64)
+    }
+
+    fn from_wrapped_u32(n: u32) -> Self {
+        // A u32 must be canonical, plus we don't store canonical encodings anyway, so there's no
+        // need for a reduction.
+        Self::new(u64::from(n))
+    }
+
+    fn from_wrapped_u64(n: u64) -> Self {
+        // There's no need to reduce `n` to canonical form, as our internal encoding is
+        // non-canonical, so there's no need for a reduction.
+        Self::new(n)
+    }
+}
+
+impl PrimeField64 for Goldilocks {
+    const ORDER_U64: u64 = 0xFFFF_FFFF_0000_0001;
+
+    fn as_canonical_u64(&self) -> u64 {
+        let mut c = self.value;
+        // We only need one condition subtraction, since 2 * ORDER would not fit in a u64.
+        if c >= Self::ORDER_U64 {
+            c -= Self::ORDER_U64;
+        }
+        c
+    }
+}
 
 impl TwoAdicField for Goldilocks {
     const TWO_ADICITY: usize = 32;
-    const POWER_OF_TWO_GENERATOR: Self = Self {
-        value: 1753635133440165772,
-    };
+
+    fn power_of_two_generator() -> Self {
+        Self::new(1_753_635_133_440_165_772)
+    }
 }
 
-impl Add<Self> for Goldilocks {
+impl Add for Goldilocks {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self {
         let (sum, over) = self.value.overflowing_add(rhs.value);
-        let (mut sum, over) = sum.overflowing_add((over as u64) * Self::NEG_ORDER);
+        let (mut sum, over) = sum.overflowing_add(u64::from(over) * Self::NEG_ORDER);
         if over {
             // NB: self.value > Self::ORDER && rhs.value > Self::ORDER is necessary but not
             // sufficient for double-overflow.
@@ -120,15 +172,15 @@ impl Add<Self> for Goldilocks {
             //     this check.
             //  2. Hints to the compiler how rare this double-overflow is (thus handled better with
             //     a branch).
-            assume(self.value > Self::ORDER && rhs.value > Self::ORDER);
+            assume(self.value > Self::ORDER_U64 && rhs.value > Self::ORDER_U64);
             branch_hint();
             sum += Self::NEG_ORDER; // Cannot overflow.
         }
-        Self { value: sum }
+        Self::new(sum)
     }
 }
 
-impl AddAssign<Self> for Goldilocks {
+impl AddAssign for Goldilocks {
     fn add_assign(&mut self, rhs: Self) {
         *self = *self + rhs;
     }
@@ -140,12 +192,12 @@ impl Sum for Goldilocks {
     }
 }
 
-impl Sub<Self> for Goldilocks {
+impl Sub for Goldilocks {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self {
         let (diff, under) = self.value.overflowing_sub(rhs.value);
-        let (mut diff, under) = diff.overflowing_sub((under as u64) * Self::NEG_ORDER);
+        let (mut diff, under) = diff.overflowing_sub(u64::from(under) * Self::NEG_ORDER);
         if under {
             // NB: self.value < NEG_ORDER - 1 && rhs.value > ORDER is necessary but not
             // sufficient for double-underflow.
@@ -154,15 +206,15 @@ impl Sub<Self> for Goldilocks {
             //     then it can skip this check.
             //  2. Hints to the compiler how rare this double-underflow is (thus handled better
             //     with a branch).
-            assume(self.value < Self::NEG_ORDER - 1 && rhs.value > Self::ORDER);
+            assume(self.value < Self::NEG_ORDER - 1 && rhs.value > Self::ORDER_U64);
             branch_hint();
             diff -= Self::NEG_ORDER; // Cannot underflow.
         }
-        Self { value: diff }
+        Self::new(diff)
     }
 }
 
-impl SubAssign<Self> for Goldilocks {
+impl SubAssign for Goldilocks {
     fn sub_assign(&mut self, rhs: Self) {
         *self = *self - rhs;
     }
@@ -172,21 +224,19 @@ impl Neg for Goldilocks {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
-        Self {
-            value: Self::ORDER - self.as_canonical_u64(),
-        }
+        Self::new(Self::ORDER_U64 - self.as_canonical_u64())
     }
 }
 
-impl Mul<Self> for Goldilocks {
+impl Mul for Goldilocks {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self {
-        reduce128((self.value as u128) * (rhs.value as u128))
+        reduce128(u128::from(self.value) * u128::from(rhs.value))
     }
 }
 
-impl MulAssign<Self> for Goldilocks {
+impl MulAssign for Goldilocks {
     fn mul_assign(&mut self, rhs: Self) {
         *self = *self * rhs;
     }
@@ -222,10 +272,11 @@ fn reduce128(x: u128) -> Goldilocks {
     }
     let t1 = x_hi_lo * Goldilocks::NEG_ORDER;
     let t2 = unsafe { add_no_canonicalize_trashing_input(t0, t1) };
-    Goldilocks { value: t2 }
+    Goldilocks::new(t2)
 }
 
 #[inline]
+#[allow(clippy::cast_possible_truncation)]
 fn split(x: u128) -> (u64, u64) {
     (x as u64, (x >> 64) as u64)
 }
@@ -267,5 +318,5 @@ unsafe fn add_no_canonicalize_trashing_input(x: u64, y: u64) -> u64 {
 unsafe fn add_no_canonicalize_trashing_input(x: u64, y: u64) -> u64 {
     let (res_wrapped, carry) = x.overflowing_add(y);
     // Below cannot overflow unless the assumption if x + y < 2**64 + ORDER is incorrect.
-    res_wrapped + Goldilocks::NEG_ORDER * (carry as u64)
+    res_wrapped + Goldilocks::NEG_ORDER * u64::from(carry)
 }

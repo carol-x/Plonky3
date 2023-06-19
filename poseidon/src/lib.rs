@@ -5,7 +5,7 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
-use p3_field::field::Field;
+use p3_field::Field;
 use p3_symmetric::permutation::{ArrayPermutation, CryptographicPermutation, MDSPermutation};
 use p3_symmetric::sponge::PaddingFreeSponge;
 use rand::distributions::Standard;
@@ -13,6 +13,7 @@ use rand::prelude::Distribution;
 use rand::Rng;
 
 /// The Poseidon permutation.
+#[derive(Clone)]
 pub struct Poseidon<F, MDS, const WIDTH: usize, const ALPHA: u64>
 where
     F: Field,
@@ -29,6 +30,10 @@ where
     F: Field,
     MDS: MDSPermutation<F, WIDTH>,
 {
+    /// Create a new Poseidon configuration.
+    ///
+    /// # Panics
+    /// Number of constants must match WIDTH times `num_rounds`; panics otherwise.
     pub fn new(
         half_num_full_rounds: usize,
         num_partial_rounds: usize,

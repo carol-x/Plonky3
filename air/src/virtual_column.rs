@@ -1,28 +1,70 @@
 use alloc::vec;
 use alloc::vec::Vec;
-use p3_field::field::{AbstractField, Field};
+use core::ops::Mul;
+use p3_field::{AbstractField, Field};
 
-/// An affine function over columns.
-pub struct VirtualColumn<F: Field> {
-    column_weights: Vec<(usize, F)>,
+/// An affine function over columns in a PAIR.
+pub struct VirtualPairCol<F: Field> {
+    column_weights: Vec<(PairCol, F)>,
     constant: F,
 }
 
-impl<F: Field> VirtualColumn<F> {
-    pub fn single(column: usize) -> Self {
+/// A column in a PAIR, i.e. either a preprocessed column or a main trace column.
+pub enum PairCol {
+    Preprocessed(usize),
+    Main(usize),
+}
+
+impl PairCol {
+    fn get<T: Copy>(&self, preprocessed: &[T], main: &[T]) -> T {
+        match self {
+            PairCol::Preprocessed(i) => preprocessed[*i],
+            PairCol::Main(i) => main[*i],
+        }
+    }
+}
+
+impl<F: Field> VirtualPairCol<F> {
+    #[must_use]
+    pub fn one() -> Self {
+        Self::constant(F::ONE)
+    }
+
+    #[must_use]
+    pub fn constant(x: F) -> Self {
+        Self {
+            column_weights: vec![],
+            constant: x,
+        }
+    }
+
+    #[must_use]
+    pub fn single(column: PairCol) -> Self {
         Self {
             column_weights: vec![(column, F::ONE)],
             constant: F::ZERO,
         }
     }
 
-    pub fn apply<Exp: AbstractField<F>, Var>(&self, row: &[Var]) -> Exp
+    #[must_use]
+    pub fn single_preprocessed(column: usize) -> Self {
+        Self::single(PairCol::Preprocessed(column))
+    }
+
+    #[must_use]
+    pub fn single_main(column: usize) -> Self {
+        Self::single(PairCol::Main(column))
+    }
+
+    pub fn apply<Expr, Var>(&self, preprocessed: &[Var], main: &[Var]) -> Expr
     where
-        Var: Into<Exp> + Copy,
+        F: Into<Expr>,
+        Expr: AbstractField + Mul<F, Output = Expr>,
+        Var: Into<Expr> + Copy,
     {
-        let mut result = Exp::from(self.constant);
-        for (column, weight) in self.column_weights.iter() {
-            result += row[*column].into() * *weight;
+        let mut result = self.constant.into();
+        for (column, weight) in &self.column_weights {
+            result += column.get(preprocessed, main).into() * *weight;
         }
         result
     }

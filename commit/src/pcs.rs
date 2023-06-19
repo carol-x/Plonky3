@@ -1,7 +1,7 @@
 //! Traits for polynomial commitment schemes.
 
 use alloc::vec;
-use p3_field::field::{Field, FieldExtension};
+use p3_field::{ExtensionField, Field};
 use p3_matrix::dense::RowMajorMatrix;
 
 use alloc::vec::Vec;
@@ -25,53 +25,60 @@ pub trait PCS<F: Field> {
 
     type Error;
 
-    fn commit_batches(polynomials: Vec<RowMajorMatrix<F>>) -> (Self::Commitment, Self::ProverData);
+    fn commit_batches(
+        &self,
+        polynomials: Vec<RowMajorMatrix<F>>,
+    ) -> (Self::Commitment, Self::ProverData);
 
-    fn commit_batch(polynomials: RowMajorMatrix<F>) -> (Self::Commitment, Self::ProverData) {
-        Self::commit_batches(vec![polynomials])
+    fn commit_batch(&self, polynomials: RowMajorMatrix<F>) -> (Self::Commitment, Self::ProverData) {
+        self.commit_batches(vec![polynomials])
     }
 
-    fn get_committed_value(prover_data: &Self::ProverData, poly: usize, value: usize) -> F;
+    fn get_committed_value(&self, prover_data: &Self::ProverData, poly: usize, value: usize) -> F;
 }
 
 pub trait UnivariatePCS<F: Field>: PCS<F> {
-    fn open_multi_batches<FE, Chal>(
+    fn open_multi_batches<EF, Chal>(
+        &self,
         prover_data: &[Self::ProverData],
-        points: &[FE],
+        points: &[EF],
         challenger: &mut Chal,
-    ) -> (Vec<Vec<Vec<FE>>>, Self::Proof)
+    ) -> (Vec<Vec<Vec<EF>>>, Self::Proof)
     where
-        FE: FieldExtension<F>,
+        EF: ExtensionField<F>,
         Chal: Challenger<F>;
 
-    fn verify_multi_batches<FE, Chal>(
+    fn verify_multi_batches<EF, Chal>(
+        &self,
         commits: &[Self::Commitment],
-        points: &[FE],
-        values: &[Vec<Vec<FE>>],
+        points: &[EF],
+        values: &[Vec<Vec<EF>>],
         proof: &Self::Proof,
     ) -> Result<(), Self::Error>
     where
-        FE: FieldExtension<F>,
+        EF: ExtensionField<F>,
         Chal: Challenger<F>;
 }
 
 pub trait MultivariatePCS<F: Field>: PCS<F> {
-    fn open_multi_batches<FE, Chal>(
+    fn open_multi_batches<EF, Chal>(
+        &self,
         prover_data: &[Self::ProverData],
-        points: &[FE],
+        points: &[Vec<EF>],
         challenger: &mut Chal,
-    ) -> (Vec<Vec<Vec<FE>>>, Self::Proof)
+    ) -> (Vec<Vec<Vec<EF>>>, Self::Proof)
     where
-        FE: FieldExtension<F>,
+        EF: ExtensionField<F>,
         Chal: Challenger<F>;
 
-    fn verify_multi_batches<FE, Chal>(
+    fn verify_multi_batches<EF, Chal>(
+        &self,
         commits: &[Self::Commitment],
-        points: &[FE],
-        values: &[Vec<Vec<FE>>],
+        points: &[Vec<EF>],
+        values: &[Vec<Vec<EF>>],
         proof: &Self::Proof,
     ) -> Result<(), Self::Error>
     where
-        FE: FieldExtension<F>,
+        EF: ExtensionField<F>,
         Chal: Challenger<F>;
 }

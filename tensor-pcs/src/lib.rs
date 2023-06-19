@@ -1,14 +1,10 @@
-//! A PCS using degree 2 tensor codes, based on BCG20 (https://eprint.iacr.org/2020/1426).
+//! A PCS using degree 2 tensor codes, based on BCG20 <https://eprint.iacr.org/2020/1426>.
 
 #![no_std]
 
-use core::marker::PhantomData;
-use p3_code::SystematicCode;
-use p3_field::field::Field;
+extern crate alloc;
 
-pub struct TensorPCS<F: Field, C: SystematicCode<F>> {
-    _code: C,
-    _phantom: PhantomData<F>,
-}
+mod tensor_pcs;
+mod wrapped_matrix;
 
-// impl<F: Field, C: SystematicCode<F>> PCS<F> for TensorPCS<F, C> {}
+pub use tensor_pcs::*;

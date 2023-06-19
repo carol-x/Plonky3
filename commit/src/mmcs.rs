@@ -1,6 +1,5 @@
 use alloc::vec::Vec;
-use p3_matrix::dense::RowMajorMatrix;
-use p3_matrix::Matrix;
+use p3_matrix::MatrixRows;
 
 /// A "Mixed Matrix Commitment Scheme" (MMCS) is a bit like a vector commitment scheme, but it
 /// supports committing to matrices and then opening rows. It is also batch-oriented; one can commit
@@ -19,10 +18,11 @@ pub trait MMCS<T> {
     type Commitment;
     type Proof;
     type Error;
-    type Mat: Matrix<T>;
+    type Mat: for<'a> MatrixRows<'a, T>;
 
     fn open_batch(row: usize, prover_data: &Self::ProverData) -> (Vec<&[T]>, Self::Proof);
 
+    /// Get the matrices that were committed to.
     fn get_matrices(prover_data: &Self::ProverData) -> &[Self::Mat];
 
     /// Verify a batch opening.
@@ -42,8 +42,5 @@ pub struct Dimensions {
 
 /// An MMCS over explicit inputs which are supplied upfront.
 pub trait DirectMMCS<T>: MMCS<T> {
-    fn commit(&self, inputs: Vec<RowMajorMatrix<T>>) -> (Self::ProverData, Self::Commitment);
+    fn commit(&self, inputs: Vec<Self::Mat>) -> (Self::Commitment, Self::ProverData);
 }
-
-// TODO: Streaming MMCS? Where `ProverData` can be initialized and then incrementally updated,
-// rather than being created all at once.

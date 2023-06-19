@@ -1,11 +1,11 @@
-use crate::field::{AbstractField, Field};
+use crate::field::{AbstractField, AbstractionOf, Field};
 use alloc::rc::Rc;
 use core::fmt::Debug;
 use core::iter::{Product, Sum};
 use core::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 #[derive(Clone, Debug)]
-pub enum SymbolicField<F: Field, Var: Clone + Debug> {
+pub enum SymbolicField<F: Field, Var> {
     Variable(Var),
     Constant(F),
     Add(Rc<Self>, Rc<Self>),
@@ -14,19 +14,30 @@ pub enum SymbolicField<F: Field, Var: Clone + Debug> {
     Mul(Rc<Self>, Rc<Self>),
 }
 
-impl<F: Field, Var: Clone + Debug> From<F> for SymbolicField<F, Var> {
+impl<F: Field, Var> Default for SymbolicField<F, Var> {
+    fn default() -> Self {
+        Self::Constant(F::ZERO)
+    }
+}
+
+impl<F: Field, Var> From<F> for SymbolicField<F, Var> {
     fn from(value: F) -> Self {
         Self::Constant(value)
     }
 }
 
-impl<F: Field, Var: Clone + Debug> AbstractField<F> for SymbolicField<F, Var> {
+impl<F: Field, Var: Clone + Debug> AbstractField for SymbolicField<F, Var> {
     const ZERO: Self = Self::Constant(F::ZERO);
     const ONE: Self = Self::Constant(F::ONE);
     const TWO: Self = Self::Constant(F::TWO);
     const NEG_ONE: Self = Self::Constant(F::NEG_ONE);
-    const MULTIPLICATIVE_GROUP_GENERATOR: Self = Self::Constant(F::MULTIPLICATIVE_GROUP_GENERATOR);
+
+    fn multiplicative_group_generator() -> Self {
+        Self::Constant(F::multiplicative_group_generator())
+    }
 }
+
+impl<F: Field, Var: Clone + Debug> AbstractionOf<F> for SymbolicField<F, Var> {}
 
 impl<F: Field, Var: Clone + Debug> Add for SymbolicField<F, Var> {
     type Output = Self;
@@ -59,6 +70,12 @@ impl<F: Field, Var: Clone + Debug> AddAssign<F> for SymbolicField<F, Var> {
 impl<F: Field, Var: Clone + Debug> Sum for SymbolicField<F, Var> {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         iter.reduce(|x, y| x + y).unwrap_or(Self::ZERO)
+    }
+}
+
+impl<F: Field, Var: Clone + Debug> Sum<F> for SymbolicField<F, Var> {
+    fn sum<I: Iterator<Item = F>>(iter: I) -> Self {
+        iter.map(|x| Self::from(x)).sum()
     }
 }
 
@@ -129,5 +146,11 @@ impl<F: Field, Var: Clone + Debug> MulAssign<F> for SymbolicField<F, Var> {
 impl<F: Field, Var: Clone + Debug> Product for SymbolicField<F, Var> {
     fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
         iter.reduce(|x, y| x * y).unwrap_or(Self::ONE)
+    }
+}
+
+impl<F: Field, Var: Clone + Debug> Product<F> for SymbolicField<F, Var> {
+    fn product<I: Iterator<Item = F>>(iter: I) -> Self {
+        iter.map(|x| Self::from(x)).product()
     }
 }
