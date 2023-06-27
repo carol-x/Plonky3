@@ -1,5 +1,5 @@
 use core::ops::{Add, Mul, Sub};
-use p3_field::{AbstractField, AbstractionOf, Field};
+use p3_field::{AbstractExtensionField, AbstractField, AbstractionOf, ExtensionField, Field};
 use p3_matrix::dense::RowMajorMatrix;
 use p3_matrix::MatrixRows;
 
@@ -94,6 +94,38 @@ pub trait AirBuilder: Sized {
         let x = x.into();
         self.assert_zero(x.clone() * (x - Self::Expr::ONE));
     }
+
+    fn assert_zero_ext<ExprExt, I>(&mut self, x: I)
+    where
+        ExprExt: AbstractExtensionField<Self::Expr>,
+        I: Into<ExprExt>,
+    {
+        for xb in x.into().as_base_slice().iter().cloned() {
+            self.assert_zero(xb);
+        }
+    }
+
+    fn assert_eq_ext<ExprExt, I1, I2>(&mut self, x: I1, y: I2)
+    where
+        ExprExt: AbstractExtensionField<Self::Expr>,
+        I1: Into<ExprExt>,
+        I2: Into<ExprExt>,
+    {
+        self.assert_zero_ext::<ExprExt, ExprExt>(x.into() - y.into());
+    }
+
+    fn assert_one_ext<ExprExt, I>(&mut self, x: I)
+    where
+        ExprExt: AbstractExtensionField<Self::Expr>,
+        I: Into<ExprExt>,
+    {
+        let xe: ExprExt = x.into();
+        let parts = xe.as_base_slice();
+        self.assert_one(parts[0].clone());
+        for part in &parts[1..] {
+            self.assert_zero(part.clone());
+        }
+    }
 }
 
 pub trait PairBuilder: AirBuilder {
@@ -101,14 +133,52 @@ pub trait PairBuilder: AirBuilder {
 }
 
 pub trait PermutationAirBuilder: AirBuilder {
-    fn permutation(&self) -> Self::M;
+    type EF: ExtensionField<Self::F>;
 
-    fn permutation_randomness(&self) -> &[Self::Expr];
+    type ExprEF: AbstractionOf<Self::EF>
+        + AbstractExtensionField<Self::Expr>
+        + From<Self::Expr>
+        + Add<Self::VarEF, Output = Self::ExprEF>
+        + Sub<Self::VarEF, Output = Self::ExprEF>
+        + Mul<Self::VarEF, Output = Self::ExprEF>;
+
+    type VarEF: Into<Self::ExprEF>
+        + Copy
+        + Add<Self::EF, Output = Self::ExprEF>
+        + Add<Self::VarEF, Output = Self::ExprEF>
+        + Add<Self::ExprEF, Output = Self::ExprEF>
+        + Sub<Self::EF, Output = Self::ExprEF>
+        + Sub<Self::VarEF, Output = Self::ExprEF>
+        + Sub<Self::ExprEF, Output = Self::ExprEF>
+        + Mul<Self::EF, Output = Self::ExprEF>
+        + Mul<Self::VarEF, Output = Self::ExprEF>
+        + Mul<Self::ExprEF, Output = Self::ExprEF>;
+
+    type MP: for<'a> MatrixRows<'a, Self::Var, Row = &'a [Self::VarEF]>;
+
+    fn permutation(&self) -> Self::MP;
+
+    fn permutation_randomness(&self) -> &[Self::EF];
 }
 
 pub struct FilteredAirBuilder<'a, AB: AirBuilder> {
     inner: &'a mut AB,
     condition: AB::Expr,
+}
+
+impl<'a, AB: PermutationAirBuilder> PermutationAirBuilder for FilteredAirBuilder<'a, AB> {
+    type EF = AB::EF;
+    type VarEF = AB::VarEF;
+    type ExprEF = AB::ExprEF;
+    type MP = AB::MP;
+
+    fn permutation(&self) -> Self::MP {
+        self.inner.permutation()
+    }
+
+    fn permutation_randomness(&self) -> &[Self::EF] {
+        self.inner.permutation_randomness()
+    }
 }
 
 impl<'a, AB: AirBuilder> AirBuilder for FilteredAirBuilder<'a, AB> {

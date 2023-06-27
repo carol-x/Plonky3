@@ -5,6 +5,8 @@ use core::iter::{Product, Sum};
 use core::ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub, SubAssign};
 use core::slice;
 
+use p3_util::log2_ceil_u64;
+
 /// A generalization of `Field` which permits things like
 /// - an actual field element
 /// - a symbolic expression which would evaluate to a field element
@@ -34,6 +36,14 @@ pub trait AbstractField:
     #[must_use]
     fn square(&self) -> Self {
         self.clone() * self.clone()
+    }
+
+    #[must_use]
+    fn powers(&self) -> Powers<Self> {
+        Powers {
+            base: self.clone(),
+            current: Self::ONE,
+        }
     }
 }
 
@@ -107,14 +117,6 @@ pub trait Field:
         }
         res
     }
-
-    #[must_use]
-    fn powers(&self) -> Powers<Self> {
-        Powers {
-            base: *self,
-            current: Self::ONE,
-        }
-    }
 }
 
 pub trait PrimeField: Field + Ord {
@@ -131,6 +133,10 @@ pub trait PrimeField: Field + Ord {
 /// A prime field of order less than `2^64`.
 pub trait PrimeField64: PrimeField {
     const ORDER_U64: u64;
+
+    fn bits() -> usize {
+        log2_ceil_u64(Self::ORDER_U64) as usize
+    }
 
     fn as_canonical_u64(&self) -> u64;
 }
@@ -165,6 +171,8 @@ pub trait AbstractExtensionField<Base>:
 
     fn from_base_slice(bs: &[Base]) -> Self;
 
+    /// Return the coefficients in little-endian order, i.e. starting with the coefficient of the
+    /// degree 0 monomial, and ending with the coefficient of the degree `D-1` monomial.
     fn as_base_slice(&self) -> &[Base];
 }
 
@@ -209,17 +217,17 @@ pub trait TwoAdicField: Field {
 
 /// An iterator over the powers of a certain base element `b`: `b^0, b^1, b^2, ...`.
 #[derive(Clone)]
-pub struct Powers<F: Field> {
-    base: F,
-    current: F,
+pub struct Powers<F> {
+    pub base: F,
+    pub current: F,
 }
 
-impl<F: Field> Iterator for Powers<F> {
+impl<F: MulAssign + Clone> Iterator for Powers<F> {
     type Item = F;
 
     fn next(&mut self) -> Option<F> {
-        let result = self.current;
-        self.current *= self.base;
+        let result = self.current.clone();
+        self.current *= self.base.clone();
         Some(result)
     }
 }
