@@ -12,6 +12,9 @@ use rand::distributions::Standard;
 use rand::prelude::Distribution;
 use rand::Rng;
 
+mod poseidon2;
+mod poseidon2_test_config;
+
 /// The Poseidon permutation.
 #[derive(Clone)]
 pub struct Poseidon<F, MDS, const WIDTH: usize, const ALPHA: u64>

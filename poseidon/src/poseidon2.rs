@@ -1,5 +1,5 @@
 use alloc::vec::Vec;
-use p3_field::field::Field;
+use p3_field::Field;
 use p3_symmetric::permutation::{ArrayPermutation, CryptographicPermutation, MDSPermutation};
 use p3_symmetric::sponge::PaddingFreeSponge;
 use rand::distributions::Standard;
@@ -100,18 +100,16 @@ where
                     let mut t_1 = state[start_index + 2];
                     t_1.add_assign(state[start_index + 3]);
                     let mut t_2 = state[start_index + 1];
-                    t_2 = t_2 * 2; 
+                    t_2 = t_2 * F::TWO; 
                     t_2.add_assign(t_1);
                     let mut t_3 = state[start_index + 3];
-                    t_3.double_in_place();
+                    t_3 = t_3 * F::TWO;
                     t_3.add_assign(t_0);
                     let mut t_4 = t_1;
-                    t_4.double_in_place();
-                    t_4.double_in_place();
+                    t_4 = t_4 * F::TWO * F::TWO;
                     t_4.add_assign(t_3);
                     let mut t_5 = t_0;
-                    t_5.double_in_place();
-                    t_5.double_in_place();
+                    t_5 = t_5 * F::TWO * F::TWO; 
                     t_5.add_assign(t_2);
                     let mut t_6 = t_3;
                     t_6.add_assign(t_5);
@@ -124,15 +122,15 @@ where
                 }
 
                 // Applying second cheap matrix
-                let mut stored = [F::zero(); 4];
+                let mut stored = [F::ZERO; 4];
                 for l in 0..4 {
                     stored[l] = state[l];
                     for j in 1..t4 {
-                        stored[l].add_assign(&state[4 * j + l]);
+                        stored[l].add_assign(state[4 * j + l]);
                     }
                 }
                 for i in 0..state.len() {
-                    state[i].add_assign(&stored[i % 4]);
+                    state[i].add_assign(stored[i % 4]);
                 }
             }
             _ => {
@@ -149,7 +147,7 @@ where
                 let mut sum = state[0];
                 sum.add_assign(state[1]);
                 state[0].add_assign(sum);
-                state[1].double_in_place();
+                state[1] = state[1] * F::TWO;
                 state[1].add_assign(sum);
             }
             3 => {
@@ -161,7 +159,7 @@ where
                 sum.add_assign(state[2]);
                 state[0].add_assign(sum);
                 state[1].add_assign(sum);
-                state[2].double_in_place();
+                state[2] = state[2] * F::TWO;
                 state[2].add_assign(sum);
             }
             4 | 8 | 12 | 16 | 20 | 24 => {
@@ -202,44 +200,38 @@ where
 #[cfg(test)]
 mod poseidon2_tests_goldilocks {
     use super::*;
-    
-    use crate::poseidon2::poseidon2_instance_goldilocks::{
-        POSEIDON2_GOLDILOCKS_8_PARAMS,
-        POSEIDON2_GOLDILOCKS_12_PARAMS,
-        POSEIDON2_GOLDILOCKS_16_PARAMS,
-        POSEIDON2_GOLDILOCKS_20_PARAMS,
-    };
-    use std::convert::TryFrom;
 
-    type Scalar = FpGoldiLocks;
+    use alloc::vec;
+    use p3_goldilocks::Goldilocks;
+    type F = Goldilocks;
+    use crate::poseidon2_test_config; 
 
     static TESTRUNS: usize = 5;
 
     #[test]
     fn consistent_perm() {
-        use rand::{thread_rng, Rng}; 
-        let instances = vec![
-            Poseidon2::new(&POSEIDON2_GOLDILOCKS_8_PARAMS)
-        ];
-        for instance in instances {
-            let t = instance.params.t;
-            for _ in 0..TESTRUNS {
-                let input1: Vec<Scalar> = (0..t).map(|_| random_scalar()).collect();
+        let rng = rand::thread_rng();
+        let WIDTH = 8;  
+        
+        let instance: Poseidon2<F, 8> = Poseidon2::new(4, 4, 2, poseidon2_tests_config::RC8, poseidon2_tests_config::MAT_INTERNAL8);
+        let t = 8;
+        for _ in 0..TESTRUNS {
+            let input1: [F; 8] = rng.sample_iter(Standard).take(t).collect();
 
-                let mut input2: Vec<Scalar>;
-                loop {
-                    input2 = (0..t).map(|_| F::rand(&mut rand::thread_rng())).collect();
-                    if input1 != input2 {
-                        break;
-                    }
+            let mut input2: [F; 8];
+            loop {
+                input2 = rng.sample_iter(Standard).take(t).collect();
+                if input1 != input2 {
+                    break;
                 }
-
-                let perm1 = instance.permute(&input1);
-                let perm2 = instance.permute(&input1);
-                let perm3 = instance.permute(&input2);
-                assert_eq!(perm1, perm2);
-                assert_ne!(perm1, perm3);
             }
+
+            let perm1 = instance.permute(input1);
+            let perm2 = instance.permute(input1);
+            let perm3 = instance.permute(input2);
+            assert_eq!(perm1, perm2);
+            assert_ne!(perm1, perm3);
         }
+        
     }
 }
