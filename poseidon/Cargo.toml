@@ -8,4 +8,5 @@ license = "MIT OR Apache-2.0"
 p3-field = { path = "../field" }
 p3-symmetric = { path = "../symmetric" }
 p3-goldilocks = { path = "../goldilocks" }
+p3-rescue = { path = "../rescue" }
 rand = "0.8.5"
