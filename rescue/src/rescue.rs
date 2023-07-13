@@ -5,7 +5,8 @@ use itertools::Itertools;
 use num::{BigUint, One};
 use num_integer::binomial;
 use p3_field::{PrimeField, PrimeField64};
-use p3_symmetric::permutation::{ArrayPermutation, CryptographicPermutation, MDSPermutation};
+use p3_symmetric::mds::MDSPermutation;
+use p3_symmetric::permutation::{ArrayPermutation, CryptographicPermutation};
 use p3_util::ceil_div_usize;
 use rand::distributions::Standard;
 use rand::prelude::Distribution;
@@ -165,20 +166,21 @@ where
 #[cfg(test)]
 mod tests {
     use itertools::Itertools;
-    use p3_field::{AbstractField, PrimeField};
+    use p3_field::AbstractField;
     use p3_mersenne_31::Mersenne31;
     use p3_symmetric::hasher::CryptographicHasher;
+    use p3_symmetric::mds::NaiveMDSMatrix;
     use p3_symmetric::permutation::CryptographicPermutation;
     use p3_symmetric::sponge::PaddingFreeSponge;
 
     use crate::inverse_sbox::BasicInverseSboxLayer;
-    use crate::mds_matrix_naive::{rescue_prime_m31_width_12_mds_matrix, MDSMatrixNaive};
+    use crate::mds_matrix_naive::rescue_prime_m31_width_12_mds_matrix;
     use crate::rescue::Rescue;
 
     const WIDTH: usize = 12;
     const ALPHA: u64 = 5;
     type RescuePrimeM31Default =
-        Rescue<Mersenne31, MDSMatrixNaive<Mersenne31, WIDTH>, BasicInverseSboxLayer, WIDTH, ALPHA>;
+        Rescue<Mersenne31, NaiveMDSMatrix<Mersenne31, WIDTH>, BasicInverseSboxLayer, WIDTH, ALPHA>;
 
     fn new_rescue_prime_m31_default() -> RescuePrimeM31Default {
         let num_rounds = RescuePrimeM31Default::num_rounds(6, 128);

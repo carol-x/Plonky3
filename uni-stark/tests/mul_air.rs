@@ -8,7 +8,8 @@ use p3_matrix::MatrixRows;
 use p3_merkle_tree::MerkleTreeMMCS;
 use p3_poseidon::Poseidon;
 use p3_symmetric::compression::TruncatedPermutation;
-use p3_symmetric::permutation::{ArrayPermutation, CryptographicPermutation, MDSPermutation};
+use p3_symmetric::mds::MDSPermutation;
+use p3_symmetric::permutation::{ArrayPermutation, CryptographicPermutation};
 use p3_symmetric::sponge::PaddingFreeSponge;
 use p3_uni_stark::{prove, StarkConfigImpl};
 use rand::thread_rng;
@@ -55,7 +56,7 @@ fn test_prove_goldilocks() {
     type C = TruncatedPermutation<Val, Perm, 2, 4, { 2 * 4 }>;
     let c = C::new(perm.clone());
 
-    type MMCS = MerkleTreeMMCS<Val, [Val; 4], H4, C>;
+    type MMCS = MerkleTreeMMCS<Val, [Val; 4], H4, C, RowMajorMatrix<Val>>;
     type LDE = NaiveCosetLDE;
     type PCS = FRIBasedPCS<Val, Domain, Challenge, LDE, MMCS, MMCS>;
     type MyConfig = StarkConfigImpl<Val, Domain, Challenge, Challenge, PCS, LDE>;
